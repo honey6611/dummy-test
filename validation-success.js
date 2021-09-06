@@ -11,8 +11,8 @@
    })
 
      const output = {
-      hasError: true,
-      data: retvalue
+      hasError: false,
+      data: []
      }  
    return output
 }
