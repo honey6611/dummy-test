@@ -26,15 +26,31 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.validate = void 0;
+exports.validate = exports.performValidations = void 0;
 const schema_1 = __webpack_require__(2);
-const ERRORS = __importStar(__webpack_require__(4));
+const mapFields_1 = __webpack_require__(4);
+const ERRORS = __importStar(__webpack_require__(5));
+/**
+ * Converts the sheet data to valid data and performs validation.
+ *
+ * @param sheetData - The data coming from the FDS sheet.
+ * @param countryCodes - The list of valid ISO country codes.
+ * @returns An object containing the errors.
+ */
+function performValidations(sheetData, countryCodes) {
+    const fds = mapFields_1.mapSheetToFields(sheetData);
+    const result = validate(fds, countryCodes);
+    const mappedResultData = mapFields_1.mapFieldsToSheet(result.data);
+    result.data = mappedResultData;
+    return result;
+}
+exports.performValidations = performValidations;
 /**
  * Validates the data inside each FDS row.
  *
  * @param fds - The FDS data.
  * @param countryCodes - The list of valid ISO country codes.
- * @returns A object containing the errors.
+ * @returns An object containing the errors.
  */
 function validate(fds, countryCodes) {
     const validCountries = schema_1.CountryArraysSchema.validate(countryCodes);
@@ -110,11 +126,11 @@ var __importStar = (this && this.__importStar) || function (mod) {
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.FdsRowSchema = exports.CountryArraysSchema = void 0;
 const Joi = __importStar(__webpack_require__(3));
-const RequiredQuantitySchema = Joi.number()
-    .min(0)
+const RequiredQuantitySchema = Joi.string()
+    .pattern(/^[0-9]\d*(\.\d+)?/)
     .required();
-const OptionalQuantitySchema = Joi.number()
-    .min(0)
+const OptionalQuantitySchema = Joi.string()
+    .pattern(/^[0-9]\d*(\.\d+)?/)
     .optional();
 const CurrencySchema = Joi.string()
     .length(3)
@@ -138,8 +154,8 @@ const CountryCodeSchema = Joi.string()
     .length(2)
     .pattern(/^[a-zA-Z]{2}$/)
     .required();
-const DateSchema = Joi.date()
-    .iso()
+const DateSchema = Joi.string()
+    .isoDate()
     .required();
 exports.CountryArraysSchema = Joi.array()
     .items(CountryCodeSchema);
@@ -156,6 +172,8 @@ exports.FdsRowSchema = Joi.object({
     netUnits: RequiredQuantitySchema,
     listPriceCurrency: CurrencySchema,
     digitalListPrice: RequiredQuantitySchema,
+    volumeDiscount: RequiredQuantitySchema,
+    durationDiscount: RequiredQuantitySchema,
     dlpXtimeDifferential: RequiredQuantitySchema,
     digitalListPriceCurrency: CurrencySchema,
     discountPercentage: RequiredQuantitySchema,
@@ -174,14 +192,17 @@ exports.FdsRowSchema = Joi.object({
     purchaseOrder: RequiredString,
     invoiceDate: DateSchema,
     relevantDepartment: OptionalString,
+    relevantModules: OptionalString,
     poInternal: RequiredString,
     bibliotechComissions: RequiredQuantitySchema,
     type: RequiredString,
     invoiceNumber: RequiredString,
     dealType: RequiredString,
-    taxExempt: Joi.boolean().optional(),
+    taxExempt: Joi.string().pattern(/^False$|^True$/).optional(),
     accessLength: RequiredQuantitySchema,
     accessDates: DateSchema,
+    poolId: RequiredString,
+    broadeningAccess: RequiredString,
 });
 //# sourceMappingURL=schema.js.map
 
@@ -193,6 +214,97 @@ exports.FdsRowSchema = Joi.object({
 
 /***/ }),
 /* 4 */
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.mapFieldsToSheet = exports.mapSheetToFields = void 0;
+const fieldMap = {
+    publisher: 'Publsiher',
+    author: 'Author',
+    title: 'Title',
+    rentalModel: 'Rental Model',
+    physicalIsbn: 'Physical ISBN',
+    digitalIsbn: 'Digital ISBN',
+    format: 'Bibliotech ISBN',
+    unitsPurchased: 'Format',
+    unitsRefunded: 'Units Purchased',
+    netUnits: 'Net Units (FTEs)',
+    listPriceCurrency: 'List Price Currency',
+    digitalListPrice: 'Digital List Price',
+    volumeDiscount: 'Volume Discount',
+    durationDiscount: 'Duration DIscount',
+    dlpXtimeDifferential: 'DLP x Time Differential',
+    digitalListPriceCurrency: 'Digital List Price Currency',
+    discountPercentage: 'Discount Percentage',
+    discountListPrice: 'Discounted List Price (Digital List Price after Discount)',
+    fulfilmentFee: 'Bibliotech 10% Fufilment Fee',
+    bibliotechMargin: 'Bibliotech Margin (%)',
+    dlpWithBibliotechMargin: 'DLP with Bibliotech Margin',
+    totalPrice: 'Total Price (excluding VAT)',
+    netPaymentAmount: 'Net Payment Amount (Publisher)',
+    paymentAmountCurrency: 'Payment Amount Currency',
+    totalBibliotechNetRevenue: 'Total Bibliotech Net Revenue',
+    contractStartDate: 'Contract Start Date',
+    contractEndDate: 'Contract End Date',
+    universityName: 'University Name',
+    countryCode: 'Country Code (ISO Code)',
+    purchaseOrder: 'Purchase Order',
+    invoiceDate: 'Invoice Date',
+    relevantDepartment: 'Relevant Department/Course(s)',
+    relevantModules: 'Relevant Module(s)',
+    poInternal: 'PO- internal',
+    bibliotechComissions: 'Bibliotech commissions',
+    type: 'Type',
+    invoiceNumber: 'Invoice Number',
+    dealType: 'Deal Type',
+    taxExempt: 'Tax Exempt (US Only)',
+    accessLength: 'Access Length/Duration',
+    accessDates: 'Access Dates (Start Date)',
+    poolId: 'Pool ID',
+    broadeningAccess: 'Broadening Access',
+};
+/**
+ * Creates an FDS object with clean field names for JS.
+ *
+ * @param fds - The data coming from the spreadsheet.
+ * @returns - An object with clean field names.
+ */
+function mapSheetToFields(fds) {
+    const mappedFds = [];
+    for (const row of fds) {
+        const mappedRow = {};
+        for (const [key, value] of Object.entries(fieldMap)) {
+            mappedRow[key] = row[value];
+        }
+        mappedFds.push(mappedRow);
+    }
+    return mappedFds;
+}
+exports.mapSheetToFields = mapSheetToFields;
+/**
+ * Creates an object with fields that match the FDS spreadsheet.
+ *
+ * @param data - The array of objects with the data.
+ * @returns - An object with fields that match the FDS spreadsheet.
+ */
+function mapFieldsToSheet(data) {
+    const mappedSheet = [];
+    for (const row of data) {
+        const mappedRow = {};
+        for (const [key, value] of Object.entries(fieldMap)) {
+            mappedRow[value] = row[key];
+        }
+        mappedSheet.push(mappedRow);
+    }
+    return mappedSheet;
+}
+exports.mapFieldsToSheet = mapFieldsToSheet;
+//# sourceMappingURL=mapFields.js.map
+
+/***/ }),
+/* 5 */
 /***/ ((__unused_webpack_module, exports) => {
 
 "use strict";
