@@ -63,6 +63,7 @@ function validate(fds, countryCodes) {
         let rowHasError = false;
         const dataRow = convertRowToErrorData(row);
         const validRow = schema_1.FdsRowSchema.validate(row, { abortEarly: false });
+        console.log(validRow)
         if (validRow.error) {
             rowHasError = true;
             for (const item of validRow.error.details) {
